@@ -103,5 +103,5 @@ We have provided Cerberus optimized ld.so and libc.so in [patched_binaries](./pa
 
 ## Licenses
 
-- Cerberus is available under the licensing terms in `CERBERUSLICENSE.txt`.
+- Cerberus is available under the licensing terms in `../LICENSE.md`.
 - Code in [benchmarks](./benchmarks) is available under the licensing terms of the corresponding project.

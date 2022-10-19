@@ -1,3 +1,5 @@
+Unless stated otherwise, all files contained here are under the following license:
+
 The MIT License (MIT)
 
 Copyright (c) 2020-2022, Alexios Voulimeneas <balexios@gmail.com>
