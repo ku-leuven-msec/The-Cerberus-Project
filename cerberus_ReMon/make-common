@@ -1,0 +1,118 @@
+#-----------------------------------------------------------------------------
+# Architecture
+#-----------------------------------------------------------------------------
+
+ifndef _ARCH
+  _ARCH := $(shell build_scripts/getmakearch.rb | grep "^ARCH" | cut -d':' -f2)
+  _ALT_ARCH := $(shell build_scripts/getmakearch.rb | grep "^ALT\_ARCH" | cut -d':' -f2)
+  export _ARCH
+  export _ALT_ARCH
+endif
+
+ARCH_LDFLAGS =
+
+#-----------------------------------------------------------------------------
+# Directories
+#-----------------------------------------------------------------------------
+
+# directories
+MVEE_SRC		= ./MVEE/Src
+MVEE_INC		= ./MVEE/Inc
+MVEE_ARCH_INC	= ./MVEE/Inc/arch/$(_ARCH)
+MVEE_OUT		= ./MVEE/bin/$(BUILD)
+MVEE_BUILD		= ./MVEE/$(BUILD)-$(_ARCH)
+
+#-----------------------------------------------------------------------------
+# Source config
+#-----------------------------------------------------------------------------
+
+SRC 	 = $(shell find $(MVEE_SRC) -maxdepth 1 -name *.c* | egrep -v "~|\#")
+SRCS	 = $(SRC)
+
+#-----------------------------------------------------------------------------
+# Common build config
+#-----------------------------------------------------------------------------
+
+STD_CXXFLAGS = -D__LINUX_X86__ -Wall -Werror -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Ideps/jsoncpp/include/
+STD_LDFLAGS  = deps/jsoncpp/build/lib/libjsoncpp.a -ldl -lrt -lstdc++ -lpthread -lz $(ARCH_LDFLAGS)
+LIBC_VER     = 2.27
+
+#-----------------------------------------------------------------------------
+# Targets
+#-----------------------------------------------------------------------------
+
+OBJ := $(SRCS:%.cpp=$(MVEE_BUILD)/%.o)
+PRE_BUILD_TABLES := $(shell build_scripts/generate_syscall_tables.rb $(LIBC_VER))
+BIN = $(MVEE_OUT)/MVEE
+
+.PHONY: all clean 
+
+all: target
+
+target: $(BIN)															\
+		patched_binaries/libc/$(_ARCH)/libc.so.6						\
+		patched_binaries/libc/$(_ARCH)/libpthread.so.0					\
+		patched_binaries/libc/$(_ARCH)/librt.so.1						\
+		patched_binaries/libc/$(_ARCH)/libdl.so.2						\
+		patched_binaries/libc/$(_ARCH)/libm.so.6						\
+		patched_binaries/libc/$(_ARCH)/libresolv.so.2					\
+		patched_binaries/libc/$(_ARCH)/libutil.so.1						\
+		patched_binaries/libc/$(_ARCH)/ld-linux.so						\
+		MVEE_LD_Loader/MVEE_LD_Loader
+
+patched_binaries/libc/$(_ARCH)/libc.so.6 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/libc.so
+	@-echo "Creating symlink to Cerberus-ready libc"
+	ln -f -s $(LIBC_VER)/libc.so patched_binaries/libc/$(_ARCH)/libc.so.6
+
+patched_binaries/libc/$(_ARCH)/libpthread.so.0 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/libpthread.so
+	@-echo "Creating symlink to Cerberus-ready libpthread"
+	ln -f -s $(LIBC_VER)/libpthread.so patched_binaries/libc/$(_ARCH)/libpthread.so.0
+
+patched_binaries/libc/$(_ARCH)/libdl.so.2 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/libdl.so
+	@-echo "Creating symlink to Cerberus-ready libdl"
+	ln -f -s $(LIBC_VER)/libdl.so patched_binaries/libc/$(_ARCH)/libdl.so.2
+
+patched_binaries/libc/$(_ARCH)/librt.so.1 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/librt.so
+	@-echo "Creating symlink to Cerberus-ready librt"
+	ln -f -s $(LIBC_VER)/librt.so patched_binaries/libc/$(_ARCH)/librt.so.1
+
+patched_binaries/libc/$(_ARCH)/libm.so.6 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/libm.so
+	@-echo "Creating symlink to Cerberus-ready libm"
+	ln -f -s $(LIBC_VER)/libm.so patched_binaries/libc/$(_ARCH)/libm.so.6
+
+patched_binaries/libc/$(_ARCH)/libresolv.so.2 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/libresolv.so
+	@-echo "Creating symlink to Cerberus-ready libresolv"
+	ln -f -s $(LIBC_VER)/libresolv.so patched_binaries/libc/$(_ARCH)/libresolv.so.2
+
+patched_binaries/libc/$(_ARCH)/libutil.so.1 : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/libutil.so
+	@-echo "Creating symlink to Cerberus-ready libutil"
+	ln -f -s $(LIBC_VER)/libutil.so patched_binaries/libc/$(_ARCH)/libutil.so.1
+
+patched_binaries/libc/$(_ARCH)/ld-linux.so : patched_binaries/libc/$(_ARCH)/$(LIBC_VER)/ld.so
+	@-echo "Creating symlink to Cerberus-ready ld-linux"
+	ln -f -s $(LIBC_VER)/ld.so patched_binaries/libc/$(_ARCH)/ld-linux.so
+
+MVEE_LD_Loader/MVEE_LD_Loader : MVEE_LD_Loader/MVEE_LD_Loader.c MVEE_LD_Loader/$(_ARCH)/MVEE_LD_Loader.h
+	build_scripts/compile_loader.rb
+
+DEPS := $(OBJ:.o=.d)
+
+-include $(DEPS)
+
+$(MVEE_BUILD)/%.o: %.cpp
+	@-mkdir -p $(MVEE_BUILD)/$(dir $<)
+	$(BUILD_CXX) -I/usr/include -I$(MVEE_INC) -I$(MVEE_ARCH_INC) $(STD_CXXFLAGS) $(BUILD_CXXFLAGS) -MM -MT $@ -MF $(patsubst %.o,%.d,$@) $<
+	$(BUILD_CXX) -I/usr/include -I$(MVEE_INC) -I$(MVEE_ARCH_INC) $(STD_CXXFLAGS) $(BUILD_CXXFLAGS) -c -o $@ $<
+
+$(BIN): $(OBJ)
+	@-mkdir -p $(MVEE_OUT)
+	$(BUILD_CXX) -fuse-ld=gold -o $@ $^ $(BUILD_LDFLAGS) $(STD_LDFLAGS)
+
+clean: 
+	rm -f $(BIN)
+	find $(MVEE_BUILD) -name *.bc | xargs rm -f
+	find $(MVEE_BUILD) -name *.o | xargs rm -f
+	find $(MVEE_BUILD) -name *.S | xargs rm -f
+	find $(MVEE_BUILD) -name *.d | xargs rm -f
+	rm -f MVEE_LD_Loader/MVEE_LD_Loader
+	rm -f MVEE_LD_Loader/MVEE_LD_Loader_this*

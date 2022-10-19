@@ -1,0 +1,197 @@
+diff --color -rN --unified glibc-2.27/csu/libc-start.c cerberus-glibc-2.27/csu/libc-start.c
+--- glibc-2.27/csu/libc-start.c	2020-12-07 17:38:09.000000000 +0100
++++ cerberus-glibc-2.27/csu/libc-start.c	2021-04-24 19:28:10.187077373 +0200
+@@ -27,6 +27,12 @@
+ 
+ extern void __libc_init_first (int argc, char **argv, char **envp);
+ 
++/* Cerberus patch */
++#define MVEE_FAKE_SYSCALL_BASE          0x6FFFFFFF
++#define MVEE_RUNS_UNDER_MVEE_CONTROL    MVEE_FAKE_SYSCALL_BASE + 9
++
++extern void mvee_infinite_loop(void);
++
+ #include <tls.h>
+ #ifndef SHARED
+ # include <dl-osinfo.h>
+@@ -289,6 +295,10 @@
+ #ifndef SHARED
+   _dl_debug_initialize (0, LM_ID_BASE);
+ #endif
++
++  /* Cerberus patch */
++  (void) syscall(MVEE_RUNS_UNDER_MVEE_CONTROL, NULL, &mvee_infinite_loop, NULL, NULL, NULL);
++
+ #ifdef HAVE_CLEANUP_JMP_BUF
+   /* Memory for the cancellation buffer.  */
+   struct pthread_unwind_buf unwind_buf;
+diff --color -rN --unified glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h cerberus-glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h
+--- glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h	2018-02-01 17:17:18.000000000 +0100
++++ cerberus-glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h	2021-04-23 17:18:06.218711000 +0200
+@@ -18,23 +18,23 @@
+ 
+ #ifndef _ARCH_PKEY_H
+ #define _ARCH_PKEY_H
+-
++/* Cerberus patch to remove wpkrus from libc */
+ /* Return the value of the PKRU register.  */
+-static inline unsigned int
++/*static inline unsigned int
+ pkey_read (void)
+ {
+   unsigned int result;
+   __asm__ volatile (".byte 0x0f, 0x01, 0xee"
+                     : "=a" (result) : "c" (0) : "rdx");
+   return result;
+-}
++}*/
+ 
+ /* Overwrite the PKRU register with VALUE.  */
+-static inline void
++/*static inline void
+ pkey_write (unsigned int value)
+ {
+   __asm__ volatile (".byte 0x0f, 0x01, 0xef"
+                     : : "a" (value), "c" (0), "d" (0));
+-}
++}*/
+ 
+ #endif /* _ARCH_PKEY_H */
+diff --color -rN --unified glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c cerberus-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c
+--- glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c	2018-02-01 17:17:18.000000000 +0100
++++ cerberus-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c	2021-04-23 17:18:06.218711000 +0200
+@@ -18,16 +18,21 @@
+ 
+ #include <arch-pkey.h>
+ #include <errno.h>
++#include <stdio.h>
+ 
+ int
+ pkey_get (int key)
+ {
+-  if (key < 0 || key > 15)
++  /* Cerberus patch to remove wpkrus from libc */
++  /*if (key < 0 || key > 15)
+     {
+       __set_errno (EINVAL);
+       return -1;
+     }
+   unsigned int pkru = pkey_read ();
+-  return (pkru >> (2 * key)) & 3;
+-  return 0;
++  return (pkru >> (2 * key)) & 3;*/
++
++  printf( "pkey_get is INVALID\n" );
++  __set_errno (EINVAL);
++  return -1;
+ }
+diff --color -rN --unified glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c cerberus-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c
+--- glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c	2018-02-01 17:17:18.000000000 +0100
++++ cerberus-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c	2021-04-23 17:18:06.218711000 +0200
+@@ -18,11 +18,13 @@
+ 
+ #include <arch-pkey.h>
+ #include <errno.h>
++#include <stdio.h>
+ 
+ int
+ pkey_set (int key, unsigned int rights)
+ {
+-  if (key < 0 || key > 15 || rights > 3)
++  /* Cerberus patch to remove wpkrus from libc */
++  /*if (key < 0 || key > 15 || rights > 3)
+     {
+       __set_errno (EINVAL);
+       return -1;
+@@ -30,6 +32,9 @@
+   unsigned int mask = 3 << (2 * key);
+   unsigned int pkru = pkey_read ();
+   pkru = (pkru & ~mask) | (rights << (2 * key));
+-  pkey_write (pkru);
+-  return 0;
++  pkey_write (pkru);*/
++
++  printf( "pkey_set is INVALID\n" );
++  __set_errno (EINVAL);
++  return -1;
+ }
+diff --color -rN --unified glibc-2.27/sysdeps/x86_64/dl-trampoline.h cerberus-glibc-2.27/sysdeps/x86_64/dl-trampoline.h
+--- glibc-2.27/sysdeps/x86_64/dl-trampoline.h	2018-02-01 17:17:18.000000000 +0100
++++ cerberus-glibc-2.27/sysdeps/x86_64/dl-trampoline.h	2021-04-24 19:37:05.326793664 +0200
+@@ -130,7 +130,21 @@
+ # else
+ 	movl $STATE_SAVE_MASK, %eax
+ 	xorl %edx, %edx
++
++	/* Cerberus patch to ensure that XRSTOR instructions from libc and ld cannot change PKRU register */
++	.align 8
+ 	xrstor STATE_SAVE_OFFSET(%rsp)
++
++	// check if XRSTOR is safe
++	bt $9, %eax
++	jnc 1f
++
++	// if XRSTOR is not safe
++	// sys_exit_group with special value
++	movq $231, %rax
++	movq $666, %rdi
++	syscall
++1:
+ # endif
+ 	movq REGISTER_SAVE_R9(%rsp), %r9
+ 	movq REGISTER_SAVE_R8(%rsp), %r8
+diff --color -rN --unified glibc-2.27/sysdeps/x86_64/multiarch/Makefile cerberus-glibc-2.27/sysdeps/x86_64/multiarch/Makefile
+--- glibc-2.27/sysdeps/x86_64/multiarch/Makefile	2018-02-01 17:17:18.000000000 +0100
++++ cerberus-glibc-2.27/sysdeps/x86_64/multiarch/Makefile	2021-04-24 19:38:02.755947407 +0200
+@@ -1,5 +1,6 @@
+ ifeq ($(subdir),csu)
+ tests += test-multiarch
++sysdep_routines += mvee_infinite_loop
+ endif
+ 
+ ifeq ($(subdir),string)
+diff --color -rN --unified glibc-2.27/sysdeps/x86_64/mvee_infinite_loop.S cerberus-glibc-2.27/sysdeps/x86_64/mvee_infinite_loop.S
+--- glibc-2.27/sysdeps/x86_64/mvee_infinite_loop.S	1970-01-01 01:00:00.000000000 +0100
++++ cerberus-glibc-2.27/sysdeps/x86_64/mvee_infinite_loop.S	2021-04-24 14:10:01.545783000 +0200
+@@ -0,0 +1,41 @@
++/* 
++ * mvee_infinite_loop:
++ * this function is used for both thread transfering and signal delivery 
++ *
++ * TODO revisit this to check if 1), 2) are still relevant for Cerberus 
++ *
++ * 1) to transfer threads to a new monitor, the original monitor (i.e. the 
++ * monitor that monitors the childs that instigated the fork event) needs to
++ * detach from the threads first. While the threads are detached, they can
++ * run freely, without the intervention of a debugger.
++ * As such, we have to move the program counter to an infinite loop while
++ * the threads are detached. This way, the threads will all be in an equivalent
++ * state when the new monitor attaches to them.
++ * Because we're going to replace the registers by their original contents
++ * when the new monitor attaches, we can use sys_pause calls in the infinite
++ * loop.
++ * 
++ * 2) delivering signals through the ptrace API happens asynchronously 
++ * (I found out the hard way). As such, we should wait for the threads to be
++ * in equivalent states (e.g. stopped on the same syscall). Then the registers
++ * should be backed up and the syscall nr should be replaced by a harmless
++ * syscall that doesn't modify the program state. We use sys_getpid for this
++ * purpose. When that replaced syscall returns, we change the pc to this
++ * infinite loop while we wait for async signal delivery.
++ * We probably cannot use syscalls while waiting for signal delivery. 
++ * One possible exception is sys_sched_yield. Our modified MVEE kernel does
++ * not report this syscall to the ptracer
++ * 
++ * the with_syscalls parameter is passed through the ecx register!
++ */
++
++		.globl mvee_infinite_loop
++		.type mvee_infinite_loop,@function
++
++mvee_infinite_loop:
++		nop
++		nop
++		nop
++		nop
++		nop
++		jmp mvee_infinite_loop

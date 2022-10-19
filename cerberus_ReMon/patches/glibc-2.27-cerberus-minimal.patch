@@ -1,0 +1,115 @@
+diff --color -rupN glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h custom-glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h
+--- glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h	2018-02-01 17:17:18.000000000 +0100
++++ custom-glibc-2.27/sysdeps/unix/sysv/linux/x86/arch-pkey.h	2021-11-23 10:28:14.318646419 +0100
+@@ -18,23 +18,23 @@
+ 
+ #ifndef _ARCH_PKEY_H
+ #define _ARCH_PKEY_H
+-
++/* Cerberus patch to remove wpkrus from libc */
+ /* Return the value of the PKRU register.  */
+-static inline unsigned int
++/*static inline unsigned int
+ pkey_read (void)
+ {
+   unsigned int result;
+   __asm__ volatile (".byte 0x0f, 0x01, 0xee"
+                     : "=a" (result) : "c" (0) : "rdx");
+   return result;
+-}
++}*/
+ 
+ /* Overwrite the PKRU register with VALUE.  */
+-static inline void
++/*static inline void
+ pkey_write (unsigned int value)
+ {
+   __asm__ volatile (".byte 0x0f, 0x01, 0xef"
+                     : : "a" (value), "c" (0), "d" (0));
+-}
++}*/
+ 
+ #endif /* _ARCH_PKEY_H */
+diff --color -rupN glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c custom-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c
+--- glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c	2018-02-01 17:17:18.000000000 +0100
++++ custom-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_get.c	2021-11-23 10:28:14.318646419 +0100
+@@ -18,16 +18,21 @@
+ 
+ #include <arch-pkey.h>
+ #include <errno.h>
++#include <stdio.h>
+ 
+ int
+ pkey_get (int key)
+ {
+-  if (key < 0 || key > 15)
++  /* Cerberus patch to remove wpkrus from libc */
++  /*if (key < 0 || key > 15)
+     {
+       __set_errno (EINVAL);
+       return -1;
+     }
+   unsigned int pkru = pkey_read ();
+-  return (pkru >> (2 * key)) & 3;
+-  return 0;
++  return (pkru >> (2 * key)) & 3;*/
++
++  printf( "pkey_get is INVALID\n" );
++  __set_errno (EINVAL);
++  return -1;
+ }
+diff --color -rupN glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c custom-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c
+--- glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c	2018-02-01 17:17:18.000000000 +0100
++++ custom-glibc-2.27/sysdeps/unix/sysv/linux/x86/pkey_set.c	2021-11-23 10:28:14.318646419 +0100
+@@ -18,11 +18,13 @@
+ 
+ #include <arch-pkey.h>
+ #include <errno.h>
++#include <stdio.h>
+ 
+ int
+ pkey_set (int key, unsigned int rights)
+ {
+-  if (key < 0 || key > 15 || rights > 3)
++  /* Cerberus patch to remove wpkrus from libc */
++  /*if (key < 0 || key > 15 || rights > 3)
+     {
+       __set_errno (EINVAL);
+       return -1;
+@@ -30,6 +32,9 @@ pkey_set (int key, unsigned int rights)
+   unsigned int mask = 3 << (2 * key);
+   unsigned int pkru = pkey_read ();
+   pkru = (pkru & ~mask) | (rights << (2 * key));
+-  pkey_write (pkru);
+-  return 0;
++  pkey_write (pkru);*/
++
++  printf( "pkey_set is INVALID\n" );
++  __set_errno (EINVAL);
++  return -1;
+ }
+diff --color -rupN glibc-2.27/sysdeps/x86_64/dl-trampoline.h custom-glibc-2.27/sysdeps/x86_64/dl-trampoline.h
+--- glibc-2.27/sysdeps/x86_64/dl-trampoline.h	2018-02-01 17:17:18.000000000 +0100
++++ custom-glibc-2.27/sysdeps/x86_64/dl-trampoline.h	2021-11-23 10:28:14.318646419 +0100
+@@ -130,7 +130,21 @@ _dl_runtime_resolve:
+ # else
+ 	movl $STATE_SAVE_MASK, %eax
+ 	xorl %edx, %edx
++
++	/* Cerberus patch to ensure that XRSTOR instructions from libc and ld cannot change PKRU register */
++	.align 8
+ 	xrstor STATE_SAVE_OFFSET(%rsp)
++
++	// check if XRSTOR is safe
++	bt $9, %eax
++	jnc 1f
++
++	// if XRSTOR is not safe
++	// sys_exit_group with special value
++	movq $231, %rax
++	movq $666, %rdi
++	syscall
++1:
+ # endif
+ 	movq REGISTER_SAVE_R9(%rsp), %r9
+ 	movq REGISTER_SAVE_R8(%rsp), %r8

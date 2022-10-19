@@ -1,11 +1,9 @@
+![cerberus](cerberus.jpg)
+
 # Cerberus
+This repo contains the code corresponding to our [EuroSys 2022 paper](https://alexios-voulimeneas.github.io/papers/cerberus.pdf).
 
+# Project Directories
 
-**We are currently in the process of licensing our work according to our university rules.  
-We estimate this to take a few more weeks (Last Update: 28/06/2022).**
-
-This repo contains the code of our EuroSys 2022 paper.
-
->A. Voulimeneas; J. Vinck; R. Mechelinck; S. Volckaert
->
->You Shall Not (by)Pass! Practical, Secure, and Fast PKU-based Sandboxing
+- Cerberus' code is placed in [cerberus_ReMon/](cerberus_ReMon/).
+- (Optional) Instructions to use ERIM's binary rewriter are placed in [binary_rewriter_guide](binary_rewriter_guide).

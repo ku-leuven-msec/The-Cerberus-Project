@@ -1,0 +1,149 @@
+diff --color -rupN erim-original/src/levee/lib/CodeGen/CPI.cpp erim/src/levee/lib/CodeGen/CPI.cpp
+--- erim-original/src/levee/lib/CodeGen/CPI.cpp	2021-09-28 23:58:09.946159000 +0200
++++ erim/src/levee/lib/CodeGen/CPI.cpp	2021-09-29 00:07:14.429963051 +0200
+@@ -1582,7 +1582,7 @@ Value *CPI::insertBoundsAndChecks(
+     case Instruction::Shl:
+     case Instruction::AShr:
+     case Instruction::LShr:
+-      Result = EmptyBounds;
++      Result = InftyBounds; //EmptyBounds; //RUBEN
+       break;
+ 
+     case Instruction::SExt:
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/asan/asan_linux.cc erim/src/levee/projects/compiler-rt/lib/asan/asan_linux.cc
+--- erim-original/src/levee/projects/compiler-rt/lib/asan/asan_linux.cc	2021-09-28 23:58:10.066159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/asan/asan_linux.cc	2021-09-29 00:07:49.806293177 +0200
+@@ -37,6 +37,8 @@
+ #include <sys/ucontext.h>
+ #endif
+ 
++const int SIGSEGV = 11;
++
+ extern "C" void* _DYNAMIC;
+ 
+ namespace __asan {
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/cpi/common_inlines.c erim/src/levee/projects/compiler-rt/lib/cpi/common_inlines.c
+--- erim-original/src/levee/projects/compiler-rt/lib/cpi/common_inlines.c	2021-09-28 23:58:10.070159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/cpi/common_inlines.c	2021-09-29 00:08:55.622924466 +0200
+@@ -54,6 +54,10 @@ void __llvm__cpi_switched_set_bounds(voi
+ __CPI_INLINE 
+ void __llvm__cpi_assert_bounds(void *val, size_t size, __llvm__cpi_bounds bounds,
+                                char *loc) {
++  //RUBEN
++  DEBUG("[CPI] Bounds Assert for Value: %p, Size: %zu, Bounds: [0x%lx,0x%lx]}\n",
++        val, size, bounds[0], bounds[1]);
++
+   if (CPI_EXPECTNOT((uintptr_t)(val) < bounds[0] ||
+                      (uintptr_t)(val) + size - 1 > bounds[1])) {
+ #ifdef CPI_VERBOSE_ERRORS
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/cpi/cpi.h erim/src/levee/projects/compiler-rt/lib/cpi/cpi.h
+--- erim-original/src/levee/projects/compiler-rt/lib/cpi/cpi.h	2021-09-28 23:58:10.070159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/cpi/cpi.h	2021-09-29 00:11:20.000375819 +0200
+@@ -8,7 +8,7 @@
+ // General settings:
+ // =============================================
+ 
+-// #define CPI_BOUNDS      // CPS or CPI
++#define CPI_BOUNDS      // CPS or CPI
+ //#define CPI_LOOKUP_TABLE   // Hash- or lookup-table?
+ #define CPI_SIMPLE_TABLE
+ #define CPI_USE_HUGETLB
+@@ -27,13 +27,13 @@
+ # define CPI_ST_STATIC      // Allocate lookup/hash table statically
+ #endif
+ 
+-//#define CPI_DEBUG       // Debug output
++#define CPI_DEBUG       // Debug output
+ // #define CPI_NOINLINE       // Disable inlining
+ // #define CPI_NOFAIL      // Ignore failures
+ // #define CPI_BOUNDS_NOFAIL      // Ignore bounds failures
+-#if defined(__FreeBSD__)
+-# define CPI_VERBOSE_ERRORS // Show details on CPS/CPI failures
+-#endif
++// #if defined(__FreeBSD__)
++ # define CPI_VERBOSE_ERRORS // Show details on CPS/CPI failures
++// #endif
+ #define CPI_DO_DELETE      // Clean arrays on free/bzero/calloc/etc.
+ #define CPI_DELETE_ON_ALLOC
+ //#define CPI_DELETE_ON_FREE
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/cpi/simpletable_inlines.c erim/src/levee/projects/compiler-rt/lib/cpi/simpletable_inlines.c
+--- erim-original/src/levee/projects/compiler-rt/lib/cpi/simpletable_inlines.c	2021-09-28 23:58:10.070159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/cpi/simpletable_inlines.c	2021-09-29 00:13:32.677774188 +0200
+@@ -155,6 +155,9 @@ void *__llvm__cpi_get_metadata_nocheck(v
+ /*** Interface function ***/
+ __CPI_INLINE
+ void *__llvm__cpi_get_val(void *metadata) {
++  //RUBEN
++  DEBUG("[CPI] Load table offset: %p\n", metadata);
++
+ 	// JUMP TO REFMON
+ #if defined(ERIM)
+   erim_switch_to_trusted;
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc erim/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc
+--- erim-original/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc	2021-09-28 23:58:10.078159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc	2021-09-29 00:15:32.043073059 +0200
+@@ -642,8 +642,8 @@ int internal_prctl(int option, uptr arg2
+   return syscall(__NR_prctl, option, arg2, arg3, arg4, arg5);
+ }
+ 
+-int internal_sigaltstack(const struct sigaltstack *ss,
+-                         struct sigaltstack *oss) {
++int internal_sigaltstack(const void *ss,
++                         void *oss) {
+   return syscall(__NR_sigaltstack, ss, oss);
+ }
+ 
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h erim/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h
+--- erim-original/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h	2021-09-28 23:58:10.078159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h	2021-09-29 00:14:56.366681341 +0200
+@@ -26,7 +26,7 @@ struct linux_dirent;
+ // Syscall wrappers.
+ int internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count);
+ int internal_prctl(int option, uptr arg2, uptr arg3, uptr arg4, uptr arg5);
+-int internal_sigaltstack(const struct sigaltstack *ss, struct sigaltstack *oss);
++int internal_sigaltstack(const void *ss, void *oss);
+ 
+ // This class reads thread IDs from /proc/<pid>/task using only syscalls.
+ class ThreadLister {
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux.cc erim/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux.cc
+--- erim-original/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux.cc	2021-09-28 23:58:10.078159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux.cc	2021-09-29 00:16:17.659577818 +0200
+@@ -215,7 +215,7 @@ static int TracerThread(void* argument)
+ 
+   // Alternate stack for signal handling.
+   InternalScopedBuffer<char> handler_stack_memory(kHandlerStackSize);
+-  struct sigaltstack handler_stack;
++  stack_t handler_stack;
+   internal_memset(&handler_stack, 0, sizeof(handler_stack));
+   handler_stack.ss_sp = handler_stack_memory.data();
+   handler_stack.ss_size = kHandlerStackSize;
+diff --color -rupN erim-original/src/levee/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc erim/src/levee/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc
+--- erim-original/src/levee/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc	2021-09-28 23:58:10.082159000 +0200
++++ erim/src/levee/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc	2021-09-29 00:17:45.192557401 +0200
+@@ -394,7 +394,8 @@ bool IsGlobalVar(uptr addr) {
+ #ifndef TSAN_GO
+ int ExtractResolvFDs(void *state, int *fds, int nfd) {
+   int cnt = 0;
+-  __res_state *statp = (__res_state*)state;
++  //__res_state *statp = (__res_state*)state;
++  struct __res_state* statp = (struct __res_state*) state;
+   for (int i = 0; i < MAXNS && cnt < nfd; i++) {
+     if (statp->_u._ext.nsaddrs[i] && statp->_u._ext.nssocks[i] != -1)
+       fds[cnt++] = statp->_u._ext.nssocks[i];
+diff --color -rupN erim-original/src/levee/tools/gold/gold-plugin.cpp erim/src/levee/tools/gold/gold-plugin.cpp
+--- erim-original/src/levee/tools/gold/gold-plugin.cpp	2021-09-28 23:58:10.578161000 +0200
++++ erim/src/levee/tools/gold/gold-plugin.cpp	2021-09-29 00:19:14.689571916 +0200
+@@ -436,6 +436,13 @@ static ld_plugin_status all_symbols_read
+       (*message)(LDPL_FATAL, "Failed to write the output file.");
+   }
+ 
++  //RUBEN lto_codegen_dispose deletes the objPath buffer!!
++  //because i do not know whether the other uses of objPath in this function
++  //actually clone the buffer or not, i just leave the dispose function in place
++  //and clone the buffer and don't delete it (ugly)
++  char* tmp = new char[strlen(objPath)];
++  strcpy(tmp, objPath);
++  objPath = tmp;
+   lto_codegen_dispose(code_gen);
+   for (std::list<claimed_file>::iterator I = Modules.begin(),
+          E = Modules.end(); I != E; ++I) {

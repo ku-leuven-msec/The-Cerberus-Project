@@ -1,0 +1,30 @@
+## either go to browser and put http://127.0.0.1:3000 or local address of machine
+## or use wget wget http://127.0.0.1:3000/ or local address of machine
+
+server.document-root = "/path/to/cerberus_ReMon/benchmarks/conf/html"
+server.port = 3000
+
+server.username = "www-data"
+server.groupname = "www-data"
+
+mimetype.assign = (
+".html" => "text/html",
+".txt" => "text/plain",
+".jpg" => "image/jpeg",
+".png" => "image/png"
+)
+
+static-file.exclude-extensions = ( ".fcgi", ".php", ".rb", "~", ".inc" )
+index-file.names = ( "index.html" )
+
+server.modules += ("mod_openssl")
+$SERVER["socket"] == "0.0.0.0:3333" {
+    ssl.engine = "enable"
+    ssl.privkey= "/path/to/cerberus_ReMon/benchmarks/conf/cert.key.wop"
+    ssl.pemfile= "/path/to/cerberus_ReMon/benchmarks/conf/cert.pem"
+
+    ssl.openssl.ssl-conf-cmd = ("Protocol" => "-TLSv1.1, -TLSv1, -SSLv3",
+                                "Options" => "-ServerPreference",
+                                "CipherString" => "ECDHE-RSA-AES128-GCM-SHA256")
+    ssl.cipher-list = "ECDHE-RSA-AES128-GCM-SHA256"
+}
